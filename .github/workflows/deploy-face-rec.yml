@@ -35,6 +35,7 @@ jobs:
         with:
           context: .
           push: true
-          tags: ghcr.io/vivianpeterfernandes/mga-face-recognition-service:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          tags: ghcr.io/${{ steps.string.outputs.owner }}/mga-face-recognition-service:latest
+          # FIX: Change cache scopes to force-evict the corrupted old URL manifests
+          cache-from: type=gha,scope=face-rec-v2
+          cache-to: type=gha,scope=face-rec-v2,mode=max

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://railway.app",
+  "build": {
+    "builder": "NIXPACKS",
+    "providers": ["java"],
+    "buildPlan": {
+      "phases": {
+        "setup": {
+          "nixPkgs": ["jdk17_headless", "ffmpeg", "opencv"]
+        },
+        "build": {
+          "cmds": ["./mvnw clean package -DskipTests -B"]
+        }
+      }
+    }
+  },
+  "deploy": {
+    "startCommand": "java -XX:+UseG1GC -XX:MaxRAMPercentage=80.0 -jar target/*.jar",
+    "healthcheckPath": "/actuator/health",
+    "healthcheckTimeout": 120
+  }
+}

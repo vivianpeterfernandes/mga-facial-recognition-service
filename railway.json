@@ -16,7 +16,6 @@
   },
   "deploy": {
     "startCommand": "java -XX:+UseG1GC -XX:MaxRAMPercentage=80.0 -jar target/*.jar",
-    "healthcheckPath": "/actuator/health",
     "healthcheckTimeout": 120
   }
 }

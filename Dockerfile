@@ -1,10 +1,21 @@
 # =========================================================================
-# Stage 2: High-Performance Runtime Stage (With Embedded Native Extensions)
+# Stage 1: Fast Cached Dependency Compiler (FORCED ALIAS TO UPPERCASE)
+# =========================================================================
+FROM maven:3.8.8-eclipse-temurin-17-alpine AS BUILDER
+WORKDIR /build
+
+COPY pom.xml .
+RUN mvn dependency:go-offline -B
+
+COPY src ./src
+RUN mvn clean package -DskipTests -B
+
+# =========================================================================
+# Stage 2: High-Performance Runtime Container
 # =========================================================================
 FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
 
-# FIX: Removed the non-existent libextstack7 package and added standard Linux dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     libopencv-dev \
@@ -16,16 +27,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Map library paths explicitly to target system distributions
 ENV LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu:/usr/local/lib"
 ENV OPENCV_VIDEOIO_PRIORITY_API="FFMPEG"
 ENV SPRING_PROFILES_ACTIVE="k8s-prod"
 
-# Tell DJL to look strictly for prepackaged, local jars and skip cloud repository downloads
 ENV DJL_CACHE_DIR="/tmp/djl_cache"
 ENV OFFLINE="true"
 
-COPY --from=builder /build/target/*.jar app.jar
+# FIX: Point strictly to the explicit UPPERCASE multi-stage builder alias
+COPY --from=BUILDER /build/target/*.jar app.jar
 
 RUN mkdir -p /app/models
 

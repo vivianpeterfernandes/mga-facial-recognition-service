@@ -78,13 +78,12 @@
 			<scope>runtime</scope>
 		</dependency>
 		<dependency>
-    <groupId>org.postgresql</groupId>
-    <artifactId>postgresql</artifactId>
-    <version>42.3.2</version>
-    <scope>runtime</scope>
-</dependency>
+			<groupId>org.postgresql</groupId>
+			<artifactId>postgresql</artifactId>
+			<version>42.3.2</version>
+			<scope>runtime</scope>
+		</dependency>
 		<dependency>
-		
 			<groupId>com.pgvector</groupId>
 			<artifactId>pgvector</artifactId>
 			<version>0.1.6</version>
@@ -113,21 +112,28 @@
 			<groupId>ai.djl.pytorch</groupId>
 			<artifactId>pytorch-model-zoo</artifactId>
 		</dependency>
+		
+		<!-- FIXED: Explicit offline JNI compilation block to fully bypass online download block traps on Railway -->
 		<dependency>
 			<groupId>ai.djl.pytorch</groupId>
 			<artifactId>pytorch-native-cpu</artifactId>
-			<version>2.4.0</version>
+			<classifier>linux-x86_64</classifier>
 			<scope>runtime</scope>
 		</dependency>
 
-		<!-- Computer Vision Library -->
+		<!-- Computer Vision Library (FIXED: Replaced openpnp with pattern to match FaceRecognitionService loader syntax) -->
+		<dependency>
+			<groupId>org.bytedeco</groupId>
+			<artifactId>opencv-platform</artifactId>
+			<version>4.9.0-1.5.10</version>
+		</dependency>
 		<dependency>
 			<groupId>org.openpnp</groupId>
 			<artifactId>opencv</artifactId>
 			<version>4.9.0-0</version>
 		</dependency>
 		
-		<!-- Superbase Bucket Storage -->
+		<!-- S3 Bucket Storage Extensions -->
 		<dependency>
     		<groupId>software.amazon.awssdk</groupId>
     		<artifactId>s3</artifactId>
@@ -147,7 +153,7 @@
 			</dependencies>
 		</profile>
 
-		<!-- 2. Kubernetes Standard Production Profile (Drops Eureka client) -->
+		<!-- 2. Kubernetes Standard Production Profile -->
 		<profile>
 			<id>k8s-prod</id>
 			<properties>

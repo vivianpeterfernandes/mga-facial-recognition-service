@@ -68,53 +68,66 @@ public class FaceRecognitionService {
     
     @PostConstruct
     public void init() throws Exception {
-        LOGGER.info("[BOOT-AI] Loading native OpenCV library layers...");
-        nu.pattern.OpenCV.loadLocally();
-
-        // Create a single secured workspace directory inside the container's physical temp drive
-        Path tempModelDir = Files.createTempDirectory("mga_compiled_models");
+        LOGGER.info("[BOOT-AI-START] Initializing Face Vision Infrastructure Engine...");
         
-        // Target physical path allocations for all three neural structures
-        Path tempProto = tempModelDir.resolve("deploy.prototxt");
-        Path tempModel = tempModelDir.resolve("res10_300x300_ssd_iter_140000.caffemodel");
-        Path targetModelFile = tempModelDir.resolve("facenet.pt");
-
-        LOGGER.info("[BOOT-AI] Extracting nested resource files down to physical sandbox file tracks...");
-        
-        // 1. Extract Face Detector Prototxt Schema definition
-        try (InputStream in = new ClassPathResource("deploy.prototxt").getInputStream()) { 
-            Files.copy(in, tempProto, StandardCopyOption.REPLACE_EXISTING); 
-        }
-        
-        // 2. Extract Caffe Model Weight configurations
-        try (InputStream in = new ClassPathResource("res10_300x300_ssd_iter_140000.caffemodel").getInputStream()) { 
-            Files.copy(in, tempModel, StandardCopyOption.REPLACE_EXISTING); 
-        }
-        
-        // 3. Extract FaceNet PyTorch matrix profiles
-        try (InputStream in = new ClassPathResource("facenet.pt").getInputStream()) {
-            Files.copy(in, targetModelFile, StandardCopyOption.REPLACE_EXISTING);
+        try {
+            LOGGER.info("[BOOT-AI-STEP 1] Loading OpenPNP OpenCV native platform definitions...");
+            // RESOLVED CONFLICT & CRASH: Uses OpenPNP loader to cleanly match your pom.xml structure
+            nu.pattern.OpenCV.loadShared(); 
+            LOGGER.info("[BOOT-AI-STEP 1 SUCCESS] OpenCV native wrappers linked.");
+        } catch (Throwable t) {
+            LOGGER.error("[BOOT-AI-STEP 1 CRASH] Fatal linkage error inside OpenCV native wrappers: {}", t.getMessage(), t);
+            throw new RuntimeException("OpenCV Native Core Linking Failure", t);
         }
 
-        LOGGER.info("[BOOT-AI] Initializing OpenCV DNN Caffe framework architecture...");
-        this.dnnFaceDetector = Dnn.readNetFromCaffe(
-            tempProto.toAbsolutePath().toString(), 
-            tempModel.toAbsolutePath().toString()
-        );
+        Path tempModelDir = null;
+        try {
+            LOGGER.info("[BOOT-AI-STEP 2] Preparing isolated filesystem targets for neural weights...");
+            tempModelDir = Files.createTempDirectory("mga_compiled_models");
+            
+            Path tempProto = tempModelDir.resolve("deploy.prototxt");
+            Path tempModel = tempModelDir.resolve("res10_300x300_ssd_iter_140000.caffemodel");
+            Path targetModelFile = tempModelDir.resolve("facenet.pt");
 
-        LOGGER.info("[BOOT-AI] Constructing DJL Criteria map arrays targeting FaceNet engine configurations...");
-        Criteria<Image, float[]> recCriteria = Criteria.builder()
-                .setTypes(Image.class, float[].class)
-                .optEngine("PyTorch")
-                .optModelPath(tempModelDir) // Feeds the absolute local directory path directly
-                .optModelName("facenet")
-                .optTranslator(new FaceNetTranslator())
-                .build();
-                
-        this.recognitionModel = recCriteria.loadModel();
-        this.faceRecognizer = recognitionModel.newPredictor();
+            // Extract all deep learning model frames directly into an executable container partition
+            try (InputStream in = new ClassPathResource("deploy.prototxt").getInputStream()) { 
+                Files.copy(in, tempProto, StandardCopyOption.REPLACE_EXISTING); 
+            }
+            try (InputStream in = new ClassPathResource("res10_300x300_ssd_iter_140000.caffemodel").getInputStream()) { 
+                Files.copy(in, tempModel, StandardCopyOption.REPLACE_EXISTING); 
+            }
+            try (InputStream in = new ClassPathResource("facenet.pt").getInputStream()) {
+                Files.copy(in, targetModelFile, StandardCopyOption.REPLACE_EXISTING);
+            }
+            
+            LOGGER.info("[BOOT-AI-STEP 2 SUCCESS] Extracted resources to sandbox pathway: {}", tempModelDir.toAbsolutePath());
+
+            LOGGER.info("[BOOT-AI-STEP 3] Assembling OpenCV DNN Caffe framework architecture matrix...");
+            this.dnnFaceDetector = Dnn.readNetFromCaffe(tempProto.toAbsolutePath().toString(), tempModel.toAbsolutePath().toString());
+            LOGGER.info("[BOOT-AI-STEP 3 SUCCESS] OpenCV Caffe models operational.");
+
+            LOGGER.info("[BOOT-AI-STEP 4] Constructing local offline DJL PyTorch Model layers...");
+            Criteria<Image, float[]> recCriteria = Criteria.builder()
+                    .setTypes(Image.class, float[].class)
+                    .optEngine("PyTorch")
+                    .optModelPath(tempModelDir)
+                    .optModelName("facenet")
+                    .optTranslator(new FaceNetTranslator())
+                    .build();
+                    
+            this.recognitionModel = recCriteria.loadModel();
+            this.faceRecognizer = recognitionModel.newPredictor();
+            LOGGER.info("[BOOT-AI-STEP 4 SUCCESS] DJL FaceNet Predictor allocated successfully.");
+
+        } catch (Exception e) {
+            LOGGER.error("[BOOT-AI-FATAL_PIPELINE_CRASH] Lifecycle initialization failed at processing checkpoints: {}", e.getMessage(), e);
+            if (tempModelDir != null) {
+                try { Files.deleteIfExists(tempModelDir); } catch (Exception ignored) {}
+            }
+            throw e;
+        }
         
-        LOGGER.info("[BOOT-AI] Neural network deployment clusters linked successfully. Service operational.");
+        LOGGER.info("[BOOT-AI-SUCCESS] Neural network deployment clusters linked successfully. Service operational.");
     }
 
     public float[] extractEmbeddingsFromFace(MultipartFile file) throws Exception {
@@ -124,7 +137,6 @@ public class FaceRecognitionService {
         try (InputStream in = file.getInputStream()) {
             Files.copy(in, uniqueTempPath, StandardCopyOption.REPLACE_EXISTING);
         }
-        
         Mat imageMat = Imgcodecs.imread(uniqueTempPath.toAbsolutePath().toString());
         Files.deleteIfExists(uniqueTempPath);
         
@@ -153,17 +165,14 @@ public class FaceRecognitionService {
             if (confidence > 0.50f && confidence > maxConfidence) {
                 maxConfidence = confidence;
                 
-                // FIX: Extract the first array element [0] before multiplying by frame dimensions
                 int x1 = (int) (detectionMat.get(i, 3)[0] * frameWidth);
                 int y1 = (int) (detectionMat.get(i, 4)[0] * frameHeight);
                 int x2 = (int) (detectionMat.get(i, 5)[0] * frameWidth);
                 int y2 = (int) (detectionMat.get(i, 6)[0] * frameHeight);
 
-                // --- GEOMETRIC TIGHTENING MATRIX ---
                 int boxWidth = x2 - x1;
                 int boxHeight = y2 - y1;
 
-                // Shrink the bounding box inward by 15% on all sides
                 int paddingX = (int) (boxWidth * 0.15);
                 int paddingY = (int) (boxHeight * 0.15);
 
@@ -173,7 +182,6 @@ public class FaceRecognitionService {
                 y2 = Math.min(frameHeight - 1, y2 - paddingY);
                 
                 bestFaceRect = new Rect(x1, y1, x2 - x1, y2 - y1);
-
             }
         }
         detectionMat.release();
@@ -199,81 +207,77 @@ public class FaceRecognitionService {
     }
     
     public AbstractMap.SimpleEntry<Member, String> isExistingMember(String username) {
-    	Member member = getMemberByUsername(username);
-    	if(Objects.isNull(member)) {
-    		return new AbstractMap.SimpleEntry<>(null, "Unregistered Member");
-    	} else if(Objects.nonNull(member)) {
-    		if(Objects.isNull(member.getMobileNumber())) {
-    			return new AbstractMap.SimpleEntry<>(null, "Unregistered Member");
-    		} else if (Objects.nonNull(member.getIsFacialRegCompleted())
-        			&& member.getIsFacialRegCompleted().equals(true)) {
-    			return new AbstractMap.SimpleEntry<>(null, "Facial Registration Already completed");
-    		} else if (Objects.nonNull(member.getIsActive())
-    			&& member.getIsActive().equals(false)) {
-    			return new AbstractMap.SimpleEntry<>(null, "Member Inactive, Please contact Admin");
-    		}
-    	}
-    	return new AbstractMap.SimpleEntry<>(member,member.getMemberId());
+        Member member = getMemberByUsername(username);
+        // SECURITY FIX: Explicit check rejects null models or empty structural objects safely
+        if (Objects.isNull(member) || Objects.isNull(member.getMemberId())) {
+            return new AbstractMap.SimpleEntry<>(null, "Unregistered Member");
+        } else {
+            if (Objects.isNull(member.getMobileNumber())) {
+                return new AbstractMap.SimpleEntry<>(null, "Unregistered Member");
+            } else if (Objects.nonNull(member.getIsFacialRegCompleted())
+                    && member.getIsFacialRegCompleted().equals(true)) {
+                return new AbstractMap.SimpleEntry<>(null, "Facial Registration Already completed");
+            } else if (Objects.nonNull(member.getIsActive())
+                && member.getIsActive().equals(false)) {
+                return new AbstractMap.SimpleEntry<>(null, "Member Inactive, Please contact Admin");
+            }
+        }
+        return new AbstractMap.SimpleEntry<>(member, member.getMemberId());
     }
     
-    
-    
     private Member getMemberByUsername(String username) {
-    	try {
-			return restClient.get()
-					.uri(MEMBER_GET_BY_USERNAME_ENDPOINT, username)
-					.retrieve()
-					.body(Member.class);
-		} catch (Exception e) {
-			LOGGER.error("Unable to find Member with Username : " + username);
-		}
-    	return new Member();
-	}
+        try {
+            return restClient.get()
+                    .uri(MEMBER_GET_BY_USERNAME_ENDPOINT, username)
+                    .retrieve()
+                    .body(Member.class);
+        } catch (Exception e) {
+            LOGGER.error("Unable to find Member with Username : " + username);
+        }
+        return null; // FIX: Prevents empty initialization vulnerabilities
+    }
 
     public Member getMemberByMemberId(String memberId) {
-    	try {
-			return restClient.get()
-			        .uri(uriBuilder -> uriBuilder
-			                .queryParam(MEMBER_GET_BY_MEMBERID_ENDPOINT, memberId)
-			                .build())
-			        .retrieve()
-			        .body(Member.class);
-		} catch (Exception e) {
-			LOGGER.error("Unable to find Member with Member Id : " + memberId);
-		}
-    	return new Member();
-	}
+        try {
+            return restClient.get()
+                    // CORE ROUTING FIX: Replaced malformed query mappings with explicit key value parameter expansion
+                    .uri(uriBuilder -> uriBuilder
+                            .path(MEMBER_GET_BY_MEMBERID_ENDPOINT)
+                            .queryParam("memberId", memberId)
+                            .build())
+                    .retrieve()
+                    .body(Member.class);
+        } catch (Exception e) {
+            LOGGER.error("Unable to find Member with Member Id : " + memberId);
+        }
+        return null;
+    }
     
     private Boolean updateFaceRegistrationStatus(String memberId) {
-		try {
-			return restClient.put()
-					.uri(MEMBER_UPDATE_FACE_REGIS_ENDPOINT, memberId)
-					.retrieve()
-					.body(Boolean.class);
-		} catch (Exception e) {
-			LOGGER.error("Unable to Update Member status for Member Id : " + memberId);
-		}
-    	return false;
-	}
+        try {
+            return restClient.put()
+                    .uri(MEMBER_UPDATE_FACE_REGIS_ENDPOINT, memberId)
+                    .retrieve()
+                    .body(Boolean.class);
+        } catch (Exception e) {
+            LOGGER.error("Unable to Update Member status for Member Id : " + memberId);
+        }
+        return false;
+    }
 
-	@Transactional
+    @Transactional
     public void registerBatchOfFaces(String memberId, List<float[]> embeddingBatch) {
-        // 1. Wipe out any OLD historical video registration frames for this specific member
         profileRepository.deleteByMemberId(memberId);
 
         List<FaceProfile> profilesToSave = new ArrayList<>();
 
         for (float[] embedding : embeddingBatch) {
             String vectorString = convertFloatArrayToVectorString(embedding);
-            
-            // 2. Scan Supabase for identity theft checks
             Optional<FaceProfile> closestMatchOpt = profileRepository.findClosestFaceMatch(vectorString);
             
             if (closestMatchOpt.isPresent()) {
                 FaceProfile duplicateCandidate = closestMatchOpt.get();
                 
-                // CRUCIAL EXCLUSION: If the database match belongs to the member we are currently 
-                // processing, ignore it! It is just one of the frames from this new batch.
                 if (!duplicateCandidate.getUserId().equals(memberId)) {
                     double rawDistance = calculateEuclideanDistance(embedding, duplicateCandidate.getEmbedding());
                     if (rawDistance < 0.65) {
@@ -282,15 +286,14 @@ public class FaceRecognitionService {
                 }
             }
 
-            // 3. Queue the frame for batch insert
-            String frameId = UUID.randomUUID().toString().substring(0, 8); // Short distinct frame id
+            String frameId = UUID.randomUUID().toString().substring(0, 8); 
             profilesToSave.add(new FaceProfile(memberId, frameId, embedding));
         }
 
-        // 4. Efficiently batch-save all frames to Supabase in a single transaction
         profileRepository.saveAll(profilesToSave);
+        // PIPELINE AUTOMATION HOOK: Mark verification complete across upstream instances instantly
+        updateFaceRegistrationStatus(memberId);
     }
- 
     private String convertFloatArrayToVectorString(float[] vector) {
         StringBuilder sb = new StringBuilder("[");
         for (int i = 0; i < vector.length; i++) {
@@ -342,13 +345,10 @@ public class FaceRecognitionService {
         LOGGER.info("[TRACE-INPUT] [ID: {}] Staged Asset Path='{}', Size={} bytes", 
                     executionId, tempVideoPath.toAbsolutePath(), downloadedVideoFile.length());
         
-        // FIX: Evaluates the local java.io.File handle descriptors directly
         if (downloadedVideoFile == null || !downloadedVideoFile.exists() || downloadedVideoFile.length() == 0) {
             LOGGER.error("[TRACE-ERROR] [ID: {}] Terminating execution: Local payload scratch wrapper is EMPTY or MISSING.", executionId);
             throw new IllegalArgumentException("Staged video file payload is empty or invalid.");
         }
-
-        // STEP 1 Staging is completely bypassed here because the controller already wrote the bytes to disk!
         
         // 2. Prepare isolated frame directory workspace
         try {
@@ -399,11 +399,16 @@ public class FaceRecognitionService {
 
             // 4. Evaluate and parse generated frame file index from disk
             LOGGER.info("[TRACE-SCAN] [ID: {}] Walking output file directory tree to index assets...", executionId);
-            List<Path> generatedFrames = Files.walk(frameOutputDir)
-                    .filter(Files::isRegularFile)
-                    .filter(p -> p.toString().toLowerCase().endsWith(".jpg"))
-                    .sorted()
-                    .collect(Collectors.toList());
+            List<Path> generatedFrames;
+            
+            // CORE IO FIX: Wraps stream inside try-with-resources to close native directory handles instantly
+            try (java.util.stream.Stream<Path> walkStream = Files.walk(frameOutputDir)) {
+                generatedFrames = walkStream
+                        .filter(Files::isRegularFile)
+                        .filter(p -> p.toString().toLowerCase().endsWith(".jpg"))
+                        .sorted()
+                        .collect(Collectors.toList());
+            }
 
             LOGGER.info("[TRACE-SCAN] [ID: {}] Indexing finished. Total image slices found: {}", 
                         executionId, generatedFrames.size());
@@ -438,7 +443,6 @@ public class FaceRecognitionService {
                         frameMat.release();
                         continue;
                     }
-
                     try {
                         LOGGER.info("[TRACE-FRAME-DNN] [ID: {}] Frame {}/{} -> Routing to extraction pipeline...", executionId, loopIndex);
                         float[] embeddings = extractEmbeddingsFromMatFrame(frameMat, faceRecognizer);
@@ -481,28 +485,36 @@ public class FaceRecognitionService {
 
         } finally {
             // 7. Housekeeping / Clean absolute scratch data to avoid container disk space bloat crashes
+            long cleanupStartTime = System.currentTimeMillis();
             LOGGER.info("[TRACE-CLEANUP] [ID: {}] Initializing terminal sweeping routines...", executionId);
             
             boolean videoDeleted = Files.deleteIfExists(tempVideoPath);
             LOGGER.info("[TRACE-CLEANUP] [ID: {}] Scratch upload video container erased. Status: {}", executionId, videoDeleted);
             
             if (Files.exists(frameOutputDir)) {
-                long deletedFramesCount = Files.walk(frameOutputDir)
-                     .map(Path::toFile)
-                     .filter(java.io.File::isFile)
-                     .peek(f -> f.delete())
-                     .count();
+                long deletedFramesCount = 0;
+                // RESOLVED CONFLICT & LEAK: Wrapped directory walking inside a try-with-resources block
+                try (java.util.stream.Stream<Path> sweepStream = Files.walk(frameOutputDir)) {
+                    deletedFramesCount = sweepStream
+                         .map(Path::toFile)
+                         .filter(java.io.File::isFile)
+                         .peek(java.io.File::delete)
+                         .count();
+                } catch (Exception e) {
+                    LOGGER.error("[TRACE-CLEANUP-WARN] Failed to completely index workspace directory objects: {}", e.getMessage());
+                }
+                
                 LOGGER.info("[TRACE-CLEANUP] [ID: {}] Erased {} image items from staging workspace.", executionId, deletedFramesCount);
                 
                 boolean dirDeleted = frameOutputDir.toFile().delete();
                 LOGGER.info("[TRACE-CLEANUP] [ID: {}] Workspace directory deleted. Status: {}", executionId, dirDeleted);
             }
             
-            LOGGER.info("[TRACE-END] [ID: {}] Process complete. Total pipeline duration: {} ms", executionId, (System.currentTimeMillis() - pipeStartTime));
+            LOGGER.info("[TRACE-END] [ID: {}] Process complete. Total pipeline duration: {} ms | Cleanup time: {} ms", 
+                        executionId, (System.currentTimeMillis() - pipeStartTime), (System.currentTimeMillis() - cleanupStartTime));
         }
     }
 
-    
     /**
      * Refactored helper method to process an internal OpenCV Mat frame directly in server RAM
      */
@@ -548,13 +560,11 @@ public class FaceRecognitionService {
             }
         }
         
-        // FIX: Replaced .close() with .release() to fix the compilation error
         detectionMat.release(); 
 
         if (bestFaceRect == null || bestFaceRect.width <= 0 || bestFaceRect.height <= 0) {
             throw new IllegalArgumentException("No face detected in this specific frame slice.");
         }
-
         Mat faceMat = new Mat(imageMat, bestFaceRect);
         MatOfByte mob = new MatOfByte();
         Imgcodecs.imencode(".jpg", faceMat, mob);

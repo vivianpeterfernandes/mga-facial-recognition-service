@@ -1,5 +1,5 @@
 # =========================================================================
-# Stage 1: Fast Cached Dependency Compiler
+# Stage 1: Build Jar Stage (Using multi-threading for speed)
 # =========================================================================
 FROM maven:3.8.8-eclipse-temurin-17-alpine AS builder
 WORKDIR /build
@@ -11,29 +11,35 @@ COPY src ./src
 RUN mvn clean package -DskipTests -B
 
 # =========================================================================
-# Stage 2: High-Performance Runtime Container
+# Stage 2: High-Performance Runtime Stage (With Embedded Native Extensions)
 # =========================================================================
 FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
 
-# Install native multimedia binaries required for JavaCV/FFmpeg frame slicing
+# FIX: Added essential graphic & shared memory extensions to satisfy native OpenCV linkages
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     libopencv-dev \
     curl \
+    libgomp1 \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libextstack7 \
     && rm -rf /var/lib/apt/lists/*
 
-# Map native engine shared library locations into standard search paths
+# Map library paths explicitly to target system distributions
 ENV LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu:/usr/local/lib"
 ENV OPENCV_VIDEOIO_PRIORITY_API="FFMPEG"
-ENV SPRING_PROFILES_ACTIVE="prod"
+ENV SPRING_PROFILES_ACTIVE="k8s-prod"
+
+# Tell DJL to look strictly for prepackaged, local jars and skip cloud repository downloads
+ENV DJL_CACHE_DIR="/tmp/djl_cache"
+ENV OFFLINE="true"
 
 COPY --from=builder /build/target/*.jar app.jar
 
-# Pre-compile directory anchors for runtime execution footprints
 RUN mkdir -p /app/models
 
 EXPOSE 8088
 
-# Boot application injecting high-performance G1GC garbage collection parameters
 ENTRYPOINT ["java", "-XX:+UseG1GC", "-XX:MaxRAMPercentage=80.0", "-jar", "app.jar"]

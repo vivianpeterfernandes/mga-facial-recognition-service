@@ -38,15 +38,14 @@ ENV OFFLINE="true"
 
 COPY --from=BUILDER /build/target/*.jar app.jar
 
-# FIX: Download clean, uncorrupted copies of ALL core vision models directly onto the container disk
-# This completely bypasses GitHub's free LFS account download bandwidth restrictions for all models
-RUN mkdir -p /app/models && \
-    curl -L -o /app/models/deploy.prototxt \
-    "https://githubusercontent.com" && \
-    curl -L -o /app/models/res10_300x300_ssd_iter_140000.caffemodel \
-    "https://github.com" && \
-    curl -L -o /app/models/facenet.pt \
-    "https://github.com"
+# FIX SYNTAX: Separate, clean RUN operations ensure absolute path security
+RUN mkdir -p /app/models
+
+RUN curl -L -o /app/models/deploy.prototxt "https://githubusercontent.com"
+
+RUN curl -L -o /app/models/res10_300x300_ssd_iter_140000.caffemodel "https://githubusercontent.com"
+
+RUN curl -L -o /app/models/facenet.pt "https://githubusercontent.com"
 
 EXPOSE 8088
 

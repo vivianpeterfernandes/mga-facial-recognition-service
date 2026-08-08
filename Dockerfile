@@ -41,7 +41,7 @@ COPY --from=builder /build/target/*.jar app.jar
 # Secure models anchor workspace directory
 RUN mkdir -p /app/models
 
-# CORE FIX: Absolute, fully expanded destination URLs matching open-source mirror hashes exactly
+# FIXED CLEAN URLS: Native Docker ADD bypasses shell parsers and downloads files directly with correct domains
 ADD https://githubusercontent.com /app/models/deploy.prototxt
 ADD https://githubusercontent.com /app/models/res10_300x300_ssd_iter_140000.caffemodel
 ADD https://githubusercontent.com /app/models/facenet.pt

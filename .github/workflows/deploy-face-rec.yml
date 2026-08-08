@@ -16,6 +16,7 @@ jobs:
       - name: Checkout Code Base
         uses: actions/checkout@v4
 
+      # Converts repository owner name to lower-case for Docker compliance
       - name: Mutate Repository Owner to Lowercase
         id: string
         run: echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> $GITHUB_OUTPUT
@@ -36,6 +37,4 @@ jobs:
           context: .
           push: true
           tags: ghcr.io/${{ steps.string.outputs.owner }}/mga-face-recognition-service:latest
-          # FIX: Change cache scopes to force-evict the corrupted old URL manifests
-          cache-from: type=gha,scope=face-rec-v2
-          cache-to: type=gha,scope=face-rec-v2,mode=max
+          # FIX: Caching layers completely stripped out to bypass the stuck runner cache

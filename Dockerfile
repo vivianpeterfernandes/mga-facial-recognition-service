@@ -1,7 +1,7 @@
 # =========================================================================
-# Stage 1: Fast Cached Dependency Compiler
+# Stage 1: Fast Cached Dependency Compiler (Forced to lowercase 'builder')
 # =========================================================================
-FROM maven:3.8.8-eclipse-temurin-17-alpine AS BUILDER
+FROM maven:3.8.8-eclipse-temurin-17-alpine AS builder
 WORKDIR /build
 
 COPY pom.xml .
@@ -36,16 +36,18 @@ ENV SPRING_PROFILES_ACTIVE="k8s-prod"
 ENV DJL_CACHE_DIR="/tmp/djl_cache"
 ENV OFFLINE="true"
 
-COPY --from=BUILDER /build/target/*.jar app.jar
+# Reference the lowercase multi-stage builder alias cleanly
+COPY --from=builder /build/target/*.jar app.jar
 
-# FIX SYNTAX: Separate, clean RUN operations ensure absolute path security
+# Setup isolation space
 RUN mkdir -p /app/models
 
-RUN curl -L -o /app/models/deploy.prototxt "https://githubusercontent.com"
+# CORE FIX: Absolute raw URLs without ANY slashes or escaped parameter quotes
+RUN curl -L -o /app/models/deploy.prototxt https://githubusercontent.com
 
-RUN curl -L -o /app/models/res10_300x300_ssd_iter_140000.caffemodel "https://githubusercontent.com"
+RUN curl -L -o /app/models/res10_300x300_ssd_iter_140000.caffemodel https://githubusercontent.com
 
-RUN curl -L -o /app/models/facenet.pt "https://githubusercontent.com"
+RUN curl -L -o /app/models/facenet.pt https://githubusercontent.com
 
 EXPOSE 8088
 

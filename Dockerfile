@@ -38,9 +38,13 @@ ENV OFFLINE="true"
 
 COPY --from=BUILDER /build/target/*.jar app.jar
 
-# FIX PATH EXTRACTION: Download a verified copy of the FaceNet parameters directly onto the container disk
-# This completely bypasses GitHub's free LFS account download bandwidth restrictions
+# FIX: Download clean, uncorrupted copies of ALL core vision models directly onto the container disk
+# This completely bypasses GitHub's free LFS account download bandwidth restrictions for all models
 RUN mkdir -p /app/models && \
+    curl -L -o /app/models/deploy.prototxt \
+    "https://githubusercontent.com" && \
+    curl -L -o /app/models/res10_300x300_ssd_iter_140000.caffemodel \
+    "https://github.com" && \
     curl -L -o /app/models/facenet.pt \
     "https://github.com"
 

@@ -72,7 +72,6 @@ public class FaceRecognitionService {
         
         try {
             LOGGER.info("[BOOT-AI-STEP 1] Loading OpenPNP OpenCV native platform definitions...");
-            // RESOLVED CONFLICT & CRASH: Uses OpenPNP loader to cleanly match your pom.xml structure
             nu.pattern.OpenCV.loadShared(); 
             LOGGER.info("[BOOT-AI-STEP 1 SUCCESS] OpenCV native wrappers linked.");
         } catch (Throwable t) {
@@ -89,23 +88,33 @@ public class FaceRecognitionService {
             Path tempModel = tempModelDir.resolve("res10_300x300_ssd_iter_140000.caffemodel");
             Path targetModelFile = tempModelDir.resolve("facenet.pt");
 
-            // 1. Extract Face Detector Prototxt Schema definition
-            try (InputStream in = new ClassPathResource("deploy.prototxt").getInputStream()) { 
-                Files.copy(in, tempProto, StandardCopyOption.REPLACE_EXISTING); 
+            // 1. Link or extract Prototxt Schema definition
+            Path bakedProto = Paths.get("/app/models/deploy.prototxt");
+            if (Files.exists(bakedProto)) {
+                Files.copy(bakedProto, tempProto, StandardCopyOption.REPLACE_EXISTING);
+            } else {
+                try (InputStream in = new ClassPathResource("deploy.prototxt").getInputStream()) { 
+                    Files.copy(in, tempProto, StandardCopyOption.REPLACE_EXISTING); 
+                }
             }
             
-            // 2. Extract Caffe Model Weight configurations
-            try (InputStream in = new ClassPathResource("res10_300x300_ssd_iter_140000.caffemodel").getInputStream()) { 
-                Files.copy(in, tempModel, StandardCopyOption.REPLACE_EXISTING); 
+            // 2. Link or extract Caffe Model Weight configurations
+            Path bakedModel = Paths.get("/app/models/res10_300x300_ssd_iter_140000.caffemodel");
+            if (Files.exists(bakedModel)) {
+                LOGGER.info("[BOOT-AI-STEP 2] Found uncorrupted container-baked Caffe face model. Linking...");
+                Files.copy(bakedModel, tempModel, StandardCopyOption.REPLACE_EXISTING);
+            } else {
+                try (InputStream in = new ClassPathResource("res10_300x300_ssd_iter_140000.caffemodel").getInputStream()) { 
+                    Files.copy(in, tempModel, StandardCopyOption.REPLACE_EXISTING); 
+                }
             }
             
-            // 3. OPTIMIZED BYPASS: Look for the Docker-baked weights first to bypass GitHub LFS bandwidth limits
+            // 3. Link or extract FaceNet PyTorch matrix profiles
             Path dockerBakedModel = Paths.get("/app/models/facenet.pt");
             if (Files.exists(dockerBakedModel)) {
-                LOGGER.info("[BOOT-AI-STEP 2] Found uncorrupted container-baked FaceNet weights at '{}'. Linking...", dockerBakedModel.toAbsolutePath());
+                LOGGER.info("[BOOT-AI-STEP 2] Found uncorrupted container-baked FaceNet weights. Linking...");
                 Files.copy(dockerBakedModel, targetModelFile, StandardCopyOption.REPLACE_EXISTING);
             } else {
-                LOGGER.warn("[BOOT-AI-STEP 2 WARNING] Container layer file absent. Falling back to ClassPath resource loading path...");
                 try (InputStream in = new ClassPathResource("facenet.pt").getInputStream()) {
                     Files.copy(in, targetModelFile, StandardCopyOption.REPLACE_EXISTING);
                 }

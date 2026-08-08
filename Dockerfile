@@ -1,5 +1,5 @@
 # =========================================================================
-# Stage 1: Fast Cached Dependency Compiler (Forced to lowercase 'builder')
+# Stage 1: Fast Cached Dependency Compiler
 # =========================================================================
 FROM maven:3.8.8-eclipse-temurin-17-alpine AS builder
 WORKDIR /build
@@ -11,7 +11,7 @@ COPY src ./src
 RUN mvn clean package -DskipTests -B
 
 # =========================================================================
-# Stage 2: High-Performance Runtime Stage (With Embedded Native Extensions)
+# Stage 2: High-Performance Runtime Stage (With Native Models Layer)
 # =========================================================================
 FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
@@ -20,7 +20,6 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     libopencv-dev \
-    curl \
     libgomp1 \
     libgl1-mesa-glx \
     libgl1 \
@@ -36,18 +35,16 @@ ENV SPRING_PROFILES_ACTIVE="k8s-prod"
 ENV DJL_CACHE_DIR="/tmp/djl_cache"
 ENV OFFLINE="true"
 
-# Reference the lowercase multi-stage builder alias cleanly
+# Reference the multi-stage builder output
 COPY --from=builder /build/target/*.jar app.jar
 
-# Setup isolation space
+# Secure models anchor workspace directory
 RUN mkdir -p /app/models
 
-# CORE FIX: Absolute raw URLs without ANY slashes or escaped parameter quotes
-RUN curl -L -o /app/models/deploy.prototxt https://githubusercontent.com
-
-RUN curl -L -o /app/models/res10_300x300_ssd_iter_140000.caffemodel https://githubusercontent.com
-
-RUN curl -L -o /app/models/facenet.pt https://githubusercontent.com
+# CORE FIX: Native Docker ADD bypasses shell parsers and downloads files directly
+ADD https://githubusercontent.com /app/models/deploy.prototxt
+ADD https://githubusercontent.com /app/models/res10_300x300_ssd_iter_140000.caffemodel
+ADD https://githubusercontent.com /app/models/facenet.pt
 
 EXPOSE 8088
 

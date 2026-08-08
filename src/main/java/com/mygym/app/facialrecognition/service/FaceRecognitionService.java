@@ -26,8 +26,6 @@ import org.opencv.core.Size;
 import org.opencv.dnn.Dnn;
 import org.opencv.dnn.Net;
 import org.opencv.imgcodecs.Imgcodecs;
-import org.opencv.videoio.VideoCapture;
-import org.opencv.videoio.Videoio;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -70,40 +68,45 @@ public class FaceRecognitionService {
     
     @PostConstruct
     public void init() throws Exception {
+        LOGGER.info("[BOOT-AI] Loading native OpenCV library layers...");
         nu.pattern.OpenCV.loadLocally();
 
-        // 1. Existing Caffe Model Extraction (Unchanged)
-        ClassPathResource protoResource = new ClassPathResource("deploy.prototxt");
-        ClassPathResource modelResource = new ClassPathResource("res10_300x300_ssd_iter_140000.caffemodel");
-
-        Path tempProto = Files.createTempFile("deploy", ".prototxt");
-        Path tempModel = Files.createTempFile("res10", ".caffemodel");
-
-        try (InputStream in = protoResource.getInputStream()) { Files.copy(in, tempProto, StandardCopyOption.REPLACE_EXISTING); }
-        try (InputStream in = modelResource.getInputStream()) { Files.copy(in, tempModel, StandardCopyOption.REPLACE_EXISTING); }
-
-        this.dnnFaceDetector = Dnn.readNetFromCaffe(tempProto.toAbsolutePath().toString(), tempModel.toAbsolutePath().toString());
+        // Create a single secured workspace directory inside the container's physical temp drive
+        Path tempModelDir = Files.createTempDirectory("mga_compiled_models");
         
-        Files.deleteIfExists(tempProto);
-        Files.deleteIfExists(tempModel);
-
-        // 2. FIXED: Safe multi-environment extraction for FaceNet PyTorch model weights
-        ClassPathResource recResource = new ClassPathResource("facenet.pt");
-        
-        // Creates a dedicated directory inside the system's temporary file workspace folder
-        Path tempModelDir = Files.createTempDirectory("djl_models");
+        // Target physical path allocations for all three neural structures
+        Path tempProto = tempModelDir.resolve("deploy.prototxt");
+        Path tempModel = tempModelDir.resolve("res10_300x300_ssd_iter_140000.caffemodel");
         Path targetModelFile = tempModelDir.resolve("facenet.pt");
+
+        LOGGER.info("[BOOT-AI] Extracting nested resource files down to physical sandbox file tracks...");
         
-        // Stream the nested resource file safely out to physical disk memory space
-        try (InputStream in = recResource.getInputStream()) {
+        // 1. Extract Face Detector Prototxt Schema definition
+        try (InputStream in = new ClassPathResource("deploy.prototxt").getInputStream()) { 
+            Files.copy(in, tempProto, StandardCopyOption.REPLACE_EXISTING); 
+        }
+        
+        // 2. Extract Caffe Model Weight configurations
+        try (InputStream in = new ClassPathResource("res10_300x300_ssd_iter_140000.caffemodel").getInputStream()) { 
+            Files.copy(in, tempModel, StandardCopyOption.REPLACE_EXISTING); 
+        }
+        
+        // 3. Extract FaceNet PyTorch matrix profiles
+        try (InputStream in = new ClassPathResource("facenet.pt").getInputStream()) {
             Files.copy(in, targetModelFile, StandardCopyOption.REPLACE_EXISTING);
         }
 
-        // 3. Pass the absolute physical path directory right into DJL criteria maps
+        LOGGER.info("[BOOT-AI] Initializing OpenCV DNN Caffe framework architecture...");
+        this.dnnFaceDetector = Dnn.readNetFromCaffe(
+            tempProto.toAbsolutePath().toString(), 
+            tempModel.toAbsolutePath().toString()
+        );
+
+        LOGGER.info("[BOOT-AI] Constructing DJL Criteria map arrays targeting FaceNet engine configurations...");
         Criteria<Image, float[]> recCriteria = Criteria.builder()
                 .setTypes(Image.class, float[].class)
                 .optEngine("PyTorch")
-                .optModelPath(tempModelDir) // Feeds the absolute local directory location path cleanly
+                .optModelPath(tempModelDir) // Feeds the absolute local directory path directly
                 .optModelName("facenet")
                 .optTranslator(new FaceNetTranslator())
                 .build();
@@ -111,13 +114,13 @@ public class FaceRecognitionService {
         this.recognitionModel = recCriteria.loadModel();
         this.faceRecognizer = recognitionModel.newPredictor();
         
-        // Clean up hint: In a production cluster layout, you can register a hook to wipe tempModelDir on shutdown if needed
+        LOGGER.info("[BOOT-AI] Neural network deployment clusters linked successfully. Service operational.");
     }
 
     public float[] extractEmbeddingsFromFace(MultipartFile file) throws Exception {
         String uniqueDir = System.getProperty("java.io.tmpdir");
         Path uniqueTempPath = Paths.get(uniqueDir, "face_upload_" + UUID.randomUUID().toString() + ".jpg");
-        
+        	
         try (InputStream in = file.getInputStream()) {
             Files.copy(in, uniqueTempPath, StandardCopyOption.REPLACE_EXISTING);
         }
@@ -478,7 +481,6 @@ public class FaceRecognitionService {
 
         } finally {
             // 7. Housekeeping / Clean absolute scratch data to avoid container disk space bloat crashes
-            long cleanupStartTime = System.currentTimeMillis();
             LOGGER.info("[TRACE-CLEANUP] [ID: {}] Initializing terminal sweeping routines...", executionId);
             
             boolean videoDeleted = Files.deleteIfExists(tempVideoPath);

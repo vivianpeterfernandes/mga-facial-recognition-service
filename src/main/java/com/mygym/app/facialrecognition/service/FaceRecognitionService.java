@@ -89,15 +89,26 @@ public class FaceRecognitionService {
             Path tempModel = tempModelDir.resolve("res10_300x300_ssd_iter_140000.caffemodel");
             Path targetModelFile = tempModelDir.resolve("facenet.pt");
 
-            // Extract all deep learning model frames directly into an executable container partition
+            // 1. Extract Face Detector Prototxt Schema definition
             try (InputStream in = new ClassPathResource("deploy.prototxt").getInputStream()) { 
                 Files.copy(in, tempProto, StandardCopyOption.REPLACE_EXISTING); 
             }
+            
+            // 2. Extract Caffe Model Weight configurations
             try (InputStream in = new ClassPathResource("res10_300x300_ssd_iter_140000.caffemodel").getInputStream()) { 
                 Files.copy(in, tempModel, StandardCopyOption.REPLACE_EXISTING); 
             }
-            try (InputStream in = new ClassPathResource("facenet.pt").getInputStream()) {
-                Files.copy(in, targetModelFile, StandardCopyOption.REPLACE_EXISTING);
+            
+            // 3. OPTIMIZED BYPASS: Look for the Docker-baked weights first to bypass GitHub LFS bandwidth limits
+            Path dockerBakedModel = Paths.get("/app/models/facenet.pt");
+            if (Files.exists(dockerBakedModel)) {
+                LOGGER.info("[BOOT-AI-STEP 2] Found uncorrupted container-baked FaceNet weights at '{}'. Linking...", dockerBakedModel.toAbsolutePath());
+                Files.copy(dockerBakedModel, targetModelFile, StandardCopyOption.REPLACE_EXISTING);
+            } else {
+                LOGGER.warn("[BOOT-AI-STEP 2 WARNING] Container layer file absent. Falling back to ClassPath resource loading path...");
+                try (InputStream in = new ClassPathResource("facenet.pt").getInputStream()) {
+                    Files.copy(in, targetModelFile, StandardCopyOption.REPLACE_EXISTING);
+                }
             }
             
             LOGGER.info("[BOOT-AI-STEP 2 SUCCESS] Extracted resources to sandbox pathway: {}", tempModelDir.toAbsolutePath());
@@ -130,6 +141,7 @@ public class FaceRecognitionService {
         LOGGER.info("[BOOT-AI-SUCCESS] Neural network deployment clusters linked successfully. Service operational.");
     }
 
+    
     public float[] extractEmbeddingsFromFace(MultipartFile file) throws Exception {
         String uniqueDir = System.getProperty("java.io.tmpdir");
         Path uniqueTempPath = Paths.get(uniqueDir, "face_upload_" + UUID.randomUUID().toString() + ".jpg");

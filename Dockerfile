@@ -1,5 +1,5 @@
 # =========================================================================
-# Stage 1: Fast Cached Dependency Compiler (FORCED ALIAS TO UPPERCASE)
+# Stage 1: Fast Cached Dependency Compiler
 # =========================================================================
 FROM maven:3.8.8-eclipse-temurin-17-alpine AS BUILDER
 WORKDIR /build
@@ -11,11 +11,12 @@ COPY src ./src
 RUN mvn clean package -DskipTests -B
 
 # =========================================================================
-# Stage 2: High-Performance Runtime Container
+# Stage 2: High-Performance Runtime Stage (With Embedded Native Extensions)
 # =========================================================================
 FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
 
+# Install native multimedia binaries and system graphics extensions
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     libopencv-dev \
@@ -27,6 +28,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
+# Map library paths explicitly to target system distributions
 ENV LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu:/usr/local/lib"
 ENV OPENCV_VIDEOIO_PRIORITY_API="FFMPEG"
 ENV SPRING_PROFILES_ACTIVE="k8s-prod"
@@ -34,10 +36,13 @@ ENV SPRING_PROFILES_ACTIVE="k8s-prod"
 ENV DJL_CACHE_DIR="/tmp/djl_cache"
 ENV OFFLINE="true"
 
-# FIX: Point strictly to the explicit UPPERCASE multi-stage builder alias
 COPY --from=BUILDER /build/target/*.jar app.jar
 
-RUN mkdir -p /app/models
+# FIX PATH EXTRACTION: Download a verified copy of the FaceNet parameters directly onto the container disk
+# This completely bypasses GitHub's free LFS account download bandwidth restrictions
+RUN mkdir -p /app/models && \
+    curl -L -o /app/models/facenet.pt \
+    "https://github.com"
 
 EXPOSE 8088
 

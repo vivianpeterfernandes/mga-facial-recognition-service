@@ -1,30 +1,19 @@
 # =========================================================================
-# Stage 1: Build Jar Stage (Using multi-threading for speed)
-# =========================================================================
-FROM maven:3.8.8-eclipse-temurin-17-alpine AS builder
-WORKDIR /build
-
-COPY pom.xml .
-RUN mvn dependency:go-offline -B
-
-COPY src ./src
-RUN mvn clean package -DskipTests -B
-
-# =========================================================================
 # Stage 2: High-Performance Runtime Stage (With Embedded Native Extensions)
 # =========================================================================
 FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
 
-# FIX: Added essential graphic & shared memory extensions to satisfy native OpenCV linkages
+# FIX: Removed the non-existent libextstack7 package and added standard Linux dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     libopencv-dev \
     curl \
     libgomp1 \
     libgl1-mesa-glx \
+    libgl1 \
+    libx11-6 \
     libglib2.0-0 \
-    libextstack7 \
     && rm -rf /var/lib/apt/lists/*
 
 # Map library paths explicitly to target system distributions
